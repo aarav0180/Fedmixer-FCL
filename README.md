@@ -100,25 +100,23 @@ TimeMixer as a fully MLP-based architecture with **Past-Decomposable-Mixing (PDM
 
 ## Continual Federated TimeMixer
 
-The TimeMixer backbone is unchanged. The opt-in continual layer adds a bounded CPU replay
-memory, mean-shift drift detection, clustered model averaging, and prediction-space mutual
-distillation around the model.
+The TimeMixer backbone is unchanged. The opt-in continual layer adds bounded replay memory,
+mean-shift drift detection, clustered averaging, and prediction-space mutual distillation.
 
-Run the dependency-light smoke demo from this directory:
+### Complete SSH/CPU workflow
+
+From the repository root on the SSH machine:
 
 ```bash
-python -m continual_federated.tiny_demo
+cd TimeMixer
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install numpy scikit-learn
 ```
 
-It uses ten scalar values and two tiny CPU clients; it does not load a repository dataset.
-For long-term forecasting, add `--continual` to enable replay and drift detection, with
-`--memory_size`, `--memory_batch_size`, `--memory_weight`, and `--drift_threshold` available
-for configuration. The default training path remains unchanged.
-
-### Download and run one dataset
-
-The paper's Electricity Consumption dataset is the recommended first dataset. Each complete
-household series becomes a federated client, and each client's timeline is divided into
+Download and split the paper's Electricity Consumption Dataset into household clients and
 chronological continual-learning tasks:
 
 ```bash
@@ -126,14 +124,91 @@ python scripts/download_electricity_federated.py \
   --output ./data/electricity_federated \
   --clients 10 \
   --max-rows 1000 \
-  --rounds 4
+  --rounds 4 \
+  --seq-len 96 \
+  --pred-len 96
 ```
 
-This command is non-interactive and works over SSH. It downloads the UCI archive, writes
-`clients/client_000.csv`, etc., and creates `manifest.json` describing each client's temporal
-tasks. Use `--max-rows 0` for the full archive, or keep it small for CPU experiments. This is
-the Electricity Consumption dataset evaluated in the FedMixer paper, where the authors select
-89 complete clients and use 96 input and 96 prediction steps.
+Inspect the generated task manifest and client files:
+
+```bash
+python -m json.tool data/electricity_federated/manifest.json | less
+head data/electricity_federated/clients/client_000.csv
+find data/electricity_federated/clients -name '*.csv' | wc -l
+```
+
+The downloader is non-interactive and SSH-safe. Use `--max-rows 0` for the full archive. The
+paper uses 89 complete clients, 15-minute samples, and 96 input plus 96 prediction steps; the
+default command above deliberately uses only 10 clients and 1,000 rows for CPU development.
+
+Run the ten-value component smoke test without a dataset:
+
+```bash
+python -m continual_federated.tiny_demo
+```
+
+Run the generic compact TimeMixer CSV smoke runner on any numeric CSV:
+
+```bash
+python scripts/run_continual_csv.py \
+  --csv ./data/electricity_federated/clients/client_000.csv \
+  --target load \
+  --limit 1000 \
+  --clients 2 \
+  --rounds 2
+```
+
+The CSV runner is a small single-series smoke path. The Electricity downloader is the
+paper-aligned client preparation path above.
+
+### Continual options for the standard experiment
+
+The regular forecasting entry point remains available. Add `--continual` to enable replay
+memory and drift detection without changing TimeMixer:
+
+```bash
+python run.py \
+  --task_name long_term_forecast \
+  --is_training 1 \
+  --model_id electricity \
+  --model TimeMixer \
+  --data custom \
+  --root_path ./data/electricity_federated/ \
+  --data_path clients/client_000.csv \
+  --features S \
+  --target load \
+  --seq_len 96 \
+  --label_len 48 \
+  --pred_len 96 \
+  --train_epochs 1 \
+  --batch_size 4 \
+  --num_workers 0 \
+  --use_gpu False \
+  --continual \
+  --memory_size 200 \
+  --memory_batch_size 16 \
+  --memory_weight 0.1 \
+  --drift_threshold 1.0
+```
+
+For the original benchmark experiments, use the supplied scripts:
+
+```bash
+bash ./scripts/long_term_forecast/ETT_script/TimeMixer_ETTm1_unify.sh
+bash ./scripts/long_term_forecast/ECL_script/TimeMixer_unify.sh
+bash ./scripts/long_term_forecast/Traffic_script/TimeMixer_unify.sh
+bash ./scripts/long_term_forecast/Solar_script/TimeMixer_unify.sh
+bash ./scripts/long_term_forecast/Weather_script/TimeMixer_unify.sh
+bash ./scripts/short_term_forecast/M4/TimeMixer.sh
+bash ./scripts/short_term_forecast/PEMS/TimeMixer.sh
+```
+
+Remove downloaded/generated artifacts when finished:
+
+```bash
+rm -rf data/electricity_federated data/ETT/ETTh1_tiny.csv
+rm -rf checkpoints results test_results
+```
 
 ### Past Decomposable Mixing 
 we propose the **Past-Decomposable-Mixing (PDM)** block to mix the decomposed seasonal and trend components in multiple scales separately. 
@@ -166,7 +241,7 @@ Note that **Future Multipredictor Mixing (FMM)** is an ensemble of multiple pred
 
 ```bash
 bash ./scripts/long_term_forecast/ETT_script/TimeMixer_ETTm1.sh
-bash ./scripts/long_term_forecast/ECL_script/TimeMixer.sh
+bash ./scripts/long_term_forecast/ECL_script/TimeMixer_unify.sh
 bash ./scripts/long_term_forecast/Traffic_script/TimeMixer.sh
 bash ./scripts/long_term_forecast/Solar_script/TimeMixer.sh
 bash ./scripts/long_term_forecast/Weather_script/TimeMixer.sh

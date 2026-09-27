@@ -17,3 +17,5 @@ data/downloads/
 # Generated experiment artifacts
 checkpoints/
 *.log
+key
+key.pub

@@ -84,7 +84,7 @@ def prepare(output, client_limit, max_rows, rounds, seq_len, pred_len):
         path = os.path.join(clients_dir, filename)
         with open(path, 'w', newline='', encoding='utf-8') as handle:
             writer = csv.writer(handle)
-            writer.writerow(['timestamp', 'load'])
+            writer.writerow(['date', 'load'])
             writer.writerows(values)
 
         task_size = len(values) // rounds
