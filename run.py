@@ -96,6 +96,13 @@ parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
 parser.add_argument('--comment', type=str, default='none', help='com')
 
+# continual federated learning (opt-in; normal TimeMixer training is unchanged)
+parser.add_argument('--continual', action='store_true', help='enable replay memory and drift detection')
+parser.add_argument('--memory_size', type=int, default=200, help='replay windows per client')
+parser.add_argument('--memory_batch_size', type=int, default=16, help='replay windows sampled per update')
+parser.add_argument('--memory_weight', type=float, default=0.1, help='replay loss weight')
+parser.add_argument('--drift_threshold', type=float, default=1.0, help='mean-shift drift threshold')
+
 # GPU
 parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
 parser.add_argument('--gpu', type=int, default=0, help='gpu')

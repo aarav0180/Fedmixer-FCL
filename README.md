@@ -98,6 +98,43 @@ TimeMixer as a fully MLP-based architecture with **Past-Decomposable-Mixing (PDM
 <img src="./figures/overall.png"  alt="" align=center />
 </p>
 
+## Continual Federated TimeMixer
+
+The TimeMixer backbone is unchanged. The opt-in continual layer adds a bounded CPU replay
+memory, mean-shift drift detection, clustered model averaging, and prediction-space mutual
+distillation around the model.
+
+Run the dependency-light smoke demo from this directory:
+
+```bash
+python -m continual_federated.tiny_demo
+```
+
+It uses ten scalar values and two tiny CPU clients; it does not load a repository dataset.
+For long-term forecasting, add `--continual` to enable replay and drift detection, with
+`--memory_size`, `--memory_batch_size`, `--memory_weight`, and `--drift_threshold` available
+for configuration. The default training path remains unchanged.
+
+### Download and run one dataset
+
+The paper's Electricity Consumption dataset is the recommended first dataset. Each complete
+household series becomes a federated client, and each client's timeline is divided into
+chronological continual-learning tasks:
+
+```bash
+python scripts/download_electricity_federated.py \
+  --output ./data/electricity_federated \
+  --clients 10 \
+  --max-rows 1000 \
+  --rounds 4
+```
+
+This command is non-interactive and works over SSH. It downloads the UCI archive, writes
+`clients/client_000.csv`, etc., and creates `manifest.json` describing each client's temporal
+tasks. Use `--max-rows 0` for the full archive, or keep it small for CPU experiments. This is
+the Electricity Consumption dataset evaluated in the FedMixer paper, where the authors select
+89 complete clients and use 96 input and 96 prediction steps.
+
 ### Past Decomposable Mixing 
 we propose the **Past-Decomposable-Mixing (PDM)** block to mix the decomposed seasonal and trend components in multiple scales separately. 
 

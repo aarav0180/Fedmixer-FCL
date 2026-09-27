@@ -4,6 +4,8 @@ from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual, save_to_csv, visual_weights
 from utils.metrics import metric
+from continual_federated.drift import MeanDriftDetector
+from continual_federated.memory import ReplayMemory
 import torch
 import torch.nn as nn
 from torch import optim
@@ -18,6 +20,11 @@ warnings.filterwarnings('ignore')
 class Exp_Long_Term_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Long_Term_Forecast, self).__init__(args)
+        self.continual = getattr(args, 'continual', False)
+        if self.continual:
+            self.replay_memory = ReplayMemory(getattr(args, 'memory_size', 200))
+            self.drift_detector = MeanDriftDetector(getattr(args, 'drift_threshold', 1.0))
+            self.last_drift = False
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -48,6 +55,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark) in enumerate(vali_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
+
+                if self.continual:
+                    self.last_drift, _ = self.drift_detector.update(batch_x)
 
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
@@ -161,6 +171,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         outputs = outputs[:, -self.args.pred_len:, f_dim:]
                         batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                         loss = criterion(outputs, batch_y)
+                        if self.continual:
+                            replay = self.replay_memory.sample(
+                                getattr(self.args, 'memory_batch_size', 16), self.device)
+                            if replay is not None:
+                                replay_x, replay_y, _ = replay
+                                replay_outputs = self.model(replay_x, None, None, None)
+                                replay_outputs = replay_outputs[:, -self.args.pred_len:, f_dim:]
+                                loss = loss + getattr(self.args, 'memory_weight', 0.1) * criterion(
+                                    replay_outputs, replay_y[:, -self.args.pred_len:, f_dim:])
+                            self.replay_memory.add_batch(batch_x, batch_y, outputs)
                         train_loss.append(loss.item())
                 else:
                     if self.args.output_attention:
@@ -171,6 +191,16 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     f_dim = -1 if self.args.features == 'MS' else 0
 
                     loss = criterion(outputs, batch_y)
+                    if self.continual:
+                        replay = self.replay_memory.sample(
+                            getattr(self.args, 'memory_batch_size', 16), self.device)
+                        if replay is not None:
+                            replay_x, replay_y, _ = replay
+                            replay_outputs = self.model(replay_x, None, None, None)
+                            replay_outputs = replay_outputs[:, -self.args.pred_len:, f_dim:]
+                            loss = loss + getattr(self.args, 'memory_weight', 0.1) * criterion(
+                                replay_outputs, replay_y[:, -self.args.pred_len:, f_dim:])
+                        self.replay_memory.add_batch(batch_x, batch_y, outputs)
                     train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:

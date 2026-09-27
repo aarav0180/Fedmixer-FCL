@@ -7,3 +7,13 @@ __pycache__/
 dataset/
 results/
 test_results/
+
+# Downloaded datasets and generated federated client splits
+data/electricity_federated/
+data/ETT/ETTh1_tiny.csv
+data/downloads/
+*.zip
+
+# Generated experiment artifacts
+checkpoints/
+*.log
