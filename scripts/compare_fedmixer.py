@@ -51,7 +51,10 @@ def run_variant(round_batches, device, continual, seed):
     def forward(model, inputs):
         return model(inputs, None, None, None)
 
-    public_inputs = round_batches[0][0][0].to(device)
+    first_client_round = round_batches[0][0]
+    if isinstance(first_client_round, list):
+        first_client_round = first_client_round[0]
+    public_inputs = first_client_round[0].to(device)
     trainer = ContinualFedMixer(clients, forward, public_inputs)
     history = trainer.fit(round_batches, continual=continual)
 

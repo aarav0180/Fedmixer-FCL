@@ -11,7 +11,8 @@ class MeanDriftDetector:
         self.previous_mean = None
 
     def update(self, current_chunk):
-        current_mean = current_chunk.detach().float().mean(dim=tuple(range(current_chunk.ndim - 1)))
+        current_mean = current_chunk.detach().float().mean(
+            dim=tuple(range(current_chunk.ndim - 1))).cpu()
         drift = False
         distance = 0.0
         if self.previous_mean is not None:
