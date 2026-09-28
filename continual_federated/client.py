@@ -26,7 +26,7 @@ class ContinualClient:
         return drift
 
     def train_batch(self, inputs, targets, forward_fn, distillation_inputs=None,
-                    distillation_targets=None):
+                    distillation_targets=None, use_replay=True):
         inputs = inputs.to(self.device)
         targets = targets.to(self.device)
         self.model.train()
@@ -34,11 +34,12 @@ class ContinualClient:
         predictions = forward_fn(self.model, inputs)
         loss = F.mse_loss(predictions, targets)
 
-        replay = self.memory.sample(self.memory_batch_size, self.device)
-        if replay is not None:
-            replay_inputs, replay_targets, _ = replay
-            replay_predictions = forward_fn(self.model, replay_inputs)
-            loss = loss + self.memory_weight * F.mse_loss(replay_predictions, replay_targets)
+        if use_replay:
+            replay = self.memory.sample(self.memory_batch_size, self.device)
+            if replay is not None:
+                replay_inputs, replay_targets, _ = replay
+                replay_predictions = forward_fn(self.model, replay_inputs)
+                loss = loss + self.memory_weight * F.mse_loss(replay_predictions, replay_targets)
 
         if distillation_inputs is not None and distillation_targets is not None:
             distill_predictions = forward_fn(self.model, distillation_inputs.to(self.device))
@@ -47,5 +48,6 @@ class ContinualClient:
 
         loss.backward()
         self.optimizer.step()
-        self.memory.add_batch(inputs, targets, predictions)
+        if use_replay:
+            self.memory.add_batch(inputs, targets, predictions)
         return loss.detach().item()

@@ -21,7 +21,7 @@ class ContinualFedMixer:
         self.public_inputs = public_inputs
         self.server = server or FedMixerServer()
 
-    def fit(self, round_batches):
+    def fit(self, round_batches, continual=True):
         history = []
         for round_index, client_batches in enumerate(round_batches, start=1):
             if len(client_batches) != len(self.clients):
@@ -40,10 +40,12 @@ class ContinualFedMixer:
                 sample_count = 0
                 client_drift = False
                 for inputs, targets in batches:
-                    client_drift = client.observe(inputs) or client_drift
+                    if continual:
+                        client_drift = client.observe(inputs) or client_drift
                     client_loss.append(client.train_batch(
                         inputs, targets, self.forward_fn,
-                        self.public_inputs, public_targets[client_index]))
+                        self.public_inputs, public_targets[client_index],
+                        use_replay=continual))
                     sample_count += len(inputs)
                 losses.append(sum(client_loss) / max(1, len(client_loss)))
                 sample_counts.append(sample_count)
@@ -52,7 +54,7 @@ class ContinualFedMixer:
             states = [{name: value.detach().clone()
                        for name, value in client.model.state_dict().items()}
                       for client in self.clients]
-            force_recluster = round_index == 1 or any(drifted)
+            force_recluster = round_index == 1 or (continual and any(drifted))
             cluster_states = self.server.aggregate(
                 states, losses, sample_counts, force_recluster=force_recluster)
             for cluster_index, indices in enumerate(self.server.clusters):
@@ -72,7 +74,8 @@ class ContinualFedMixer:
         representatives = [self.clients[indices[0]].model
                             for indices in self.server.clusters]
         with torch.no_grad():
-            predictions = [self.forward_fn(model, self.public_inputs)
+            device = next(representatives[0].parameters()).device
+            predictions = [self.forward_fn(model, self.public_inputs.to(device))
                            for model in representatives]
             ensemble = torch.stack(predictions).mean(dim=0).detach()
         return [ensemble.clone() for _ in self.clients]

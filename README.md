@@ -118,6 +118,10 @@ python -m pip install -r requirements.txt
 python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CUDA unavailable')"
 ```
 
+Run the commands on the Linux GPU host. On some managed Windows machines, importing
+scikit-learn may fail with `Application Control policy has blocked this file` while loading
+`_dist_metrics`; that is an environment DLL policy issue, not a TimeMixer error.
+
 Download and split the paper's Electricity Consumption Dataset into household clients and
 chronological continual-learning tasks:
 
@@ -163,6 +167,49 @@ python scripts/run_continual_csv.py \
 The CSV runner is a small single-series smoke path. The Electricity downloader is the
 paper-aligned client preparation path above.
 
+Run the FedMixer baseline alone:
+
+```bash
+python scripts/compare_fedmixer.py \
+  --data-dir ./data/electricity_federated \
+  --clients 2 \
+  --rounds 4 \
+  --limit 1000 \
+  --device cuda \
+  --mode baseline \
+  --output ./output/output.log
+```
+
+Run Continual FedMixer alone:
+
+```bash
+python scripts/compare_fedmixer.py \
+  --data-dir ./data/electricity_federated \
+  --clients 2 \
+  --rounds 4 \
+  --limit 1000 \
+  --device cuda \
+  --mode continual \
+  --output ./output/output.log
+```
+
+Run both variants in one command, which is the default:
+
+```bash
+python scripts/compare_fedmixer.py \
+  --data-dir ./data/electricity_federated \
+  --clients 2 \
+  --rounds 4 \
+  --limit 1000 \
+  --device cuda \
+  --mode both \
+  --output ./output/output.log
+```
+
+The baseline keeps clustered averaging and mutual distillation but disables replay memory
+and drift detection. The continual variant enables both. The selected results are printed to
+the terminal and written to `output/output.log`; the output directory is created automatically.
+
 ### Continual options for the standard experiment
 
 The regular forecasting entry point remains available. Add `--continual` to enable replay
@@ -179,9 +226,15 @@ python run.py \
   --data_path clients/client_000.csv \
   --features S \
   --target load \
+  --enc_in 1 \
+  --dec_in 1 \
+  --c_out 1 \
   --seq_len 96 \
   --label_len 48 \
   --pred_len 96 \
+  --down_sampling_layers 1 \
+  --down_sampling_window 2 \
+  --down_sampling_method avg \
   --train_epochs 1 \
   --batch_size 4 \
   --num_workers 0 \
