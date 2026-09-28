@@ -91,7 +91,8 @@ def main():
             name, mse, mae, history[-1]['clusters'], history[-1]['memory']))
 
     os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
-    with open(args.output, 'w', encoding='utf-8') as handle:
+    with open(args.output, 'a', encoding='utf-8') as handle:
+        handle.write('\n=== mode: {} ===\n'.format(args.mode))
         handle.write('\n'.join(output_lines) + '\n')
     print('\n'.join(output_lines))
     print('results saved to {}'.format(args.output))

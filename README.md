@@ -210,10 +210,10 @@ The baseline keeps clustered averaging and mutual distillation but disables repl
 and drift detection. The continual variant enables both. The selected results are printed to
 the terminal and written to `output/output.log`; the output directory is created automatically.
 
-### Continual options for the standard experiment
+### Standard single-client training
 
-The regular forecasting entry point remains available. Add `--continual` to enable replay
-memory and drift detection without changing TimeMixer:
+The following `run.py` command trains one client with TimeMixer. It is not the multi-client
+FedMixer comparison. Add `--continual` to enable replay memory and drift detection:
 
 ```bash
 python run.py \
@@ -246,6 +246,11 @@ python run.py \
   --memory_weight 0.1 \
   --drift_threshold 1.0
 ```
+
+The actual FedMixer baseline and continual comparison commands are the three commands above:
+use `--mode baseline` for FedMixer only, `--mode continual` for FedMixer plus continual
+learning, or `--mode both` to run and display both. Results are appended to
+`output/output.log`.
 
 For the original benchmark experiments, use the supplied scripts:
 

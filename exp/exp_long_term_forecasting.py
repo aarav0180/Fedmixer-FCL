@@ -99,6 +99,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     total_loss.append(mae)
 
                 else:
+                    pred = pred[:, -self.args.pred_len:, f_dim:]
+                    true = true[:, -self.args.pred_len:, f_dim:]
                     loss = criterion(pred, true)
                     total_loss.append(loss.item())
 
@@ -294,7 +296,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
 
                 f_dim = -1 if self.args.features == 'MS' else 0
-                
+                outputs = outputs[:, -self.args.pred_len:, f_dim:]
+                batch_y = batch_y[:, -self.args.pred_len:, f_dim:]
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
 
