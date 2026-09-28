@@ -34,8 +34,18 @@ def build_rounds(data_dir, client_count, rounds, limit):
         path = Path(data_dir) / 'clients' / 'client_{:03d}.csv'.format(client_index)
         values = load_csv_series(path, target='load', limit=limit)
         client_batches.append(make_rounds(values, 1, rounds, 96, 96))
-    return [[client_batches[index][round_index][0]
-             for index in range(client_count)] for round_index in range(rounds)]
+    normalized_rounds = []
+    for round_index in range(rounds):
+        normalized_clients = []
+        for client_index in range(client_count):
+            batches = client_batches[client_index][round_index]
+            if len(batches) != 1:
+                raise ValueError(
+                    'client {} round {} must contain exactly one complete batch'.format(
+                        client_index, round_index + 1))
+            normalized_clients.append(batches[0])
+        normalized_rounds.append(normalized_clients)
+    return normalized_rounds
 
 
 def run_variant(round_batches, device, continual, seed):

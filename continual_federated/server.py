@@ -31,6 +31,9 @@ class FedMixerServer:
         affinity = torch.exp(-(distances ** 2) / (2 * scale ** 2)).numpy()
         count = self.cluster_count or min(3, len(states))
         count = max(1, min(count, len(states)))
+        if count == len(states):
+            self.clusters = [[index] for index in range(len(states))]
+            return self.clusters
         labels = SpectralClustering(
             n_clusters=count,
             affinity='precomputed',
