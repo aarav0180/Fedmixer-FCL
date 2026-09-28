@@ -71,7 +71,10 @@ def run_variant(round_batches, device, continual, seed):
     mse_values = []
     mae_values = []
     with torch.no_grad():
-        for client, (inputs, targets) in zip(clients, round_batches[-1]):
+        for client, client_batch in zip(clients, round_batches[-1]):
+            if isinstance(client_batch, list):
+                client_batch = client_batch[0]
+            inputs, targets = client_batch
             predictions = forward(client.model, inputs.to(device))
             expected = targets.to(device)
             mse_values.append(F.mse_loss(predictions, expected).item())
