@@ -103,7 +103,7 @@ TimeMixer as a fully MLP-based architecture with **Past-Decomposable-Mixing (PDM
 The TimeMixer backbone is unchanged. The opt-in continual layer adds bounded replay memory,
 mean-shift drift detection, clustered averaging, and prediction-space mutual distillation.
 
-### Complete SSH/CPU workflow
+### Complete SSH/GPU workflow
 
 From the repository root on the SSH machine:
 
@@ -112,8 +112,10 @@ cd TimeMixer
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+nvidia-smi
+python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 python -m pip install numpy scikit-learn
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CUDA unavailable')"
 ```
 
 Download and split the paper's Electricity Consumption Dataset into household clients and
@@ -139,7 +141,7 @@ find data/electricity_federated/clients -name '*.csv' | wc -l
 
 The downloader is non-interactive and SSH-safe. Use `--max-rows 0` for the full archive. The
 paper uses 89 complete clients, 15-minute samples, and 96 input plus 96 prediction steps; the
-default command above deliberately uses only 10 clients and 1,000 rows for CPU development.
+default command above deliberately uses only 10 clients and 1,000 rows for development.
 
 Run the ten-value component smoke test without a dataset:
 
@@ -183,7 +185,8 @@ python run.py \
   --train_epochs 1 \
   --batch_size 4 \
   --num_workers 0 \
-  --use_gpu False \
+  --use_gpu True \
+  --gpu 0 \
   --continual \
   --memory_size 200 \
   --memory_batch_size 16 \
