@@ -37,11 +37,12 @@ def make_rounds(values, client_count=2, rounds=2, seq_len=4, pred_len=1):
             start = round_index * (seq_len + pred_len)
             chunk = stream[start:start + seq_len + pred_len]
             batches = []
-            if len(chunk) == seq_len + pred_len:
+            window_count = len(chunk) - seq_len - pred_len + 1
+            if window_count > 0:
                 inputs = torch.stack([chunk[index:index + seq_len]
-                                      for index in range(pred_len)]).unsqueeze(-1)
+                                      for index in range(window_count)]).unsqueeze(-1)
                 targets = torch.stack([chunk[index + seq_len:index + seq_len + pred_len]
-                                       for index in range(pred_len)]).unsqueeze(-1)
+                                       for index in range(window_count)]).unsqueeze(-1)
                 batches.append((inputs, targets))
             client_round.append(batches)
         result.append(client_round)
