@@ -210,6 +210,35 @@ The baseline keeps clustered averaging and mutual distillation but disables repl
 and drift detection. The continual variant enables both. The selected results are printed to
 the terminal and written to `output/output.log`; the output directory is created automatically.
 
+The commands above are smoke runs using 1,000 rows per client. To run the full Electricity
+archive, prepare all rows and clients first:
+
+```bash
+python scripts/download_electricity_federated.py \
+  --output ./data/electricity_federated \
+  --clients 10 \
+  --max-rows 0 \
+  --rounds 4 \
+  --seq-len 96 \
+  --pred-len 96
+```
+
+Then run the full side-by-side comparison with `--limit 0`:
+
+```bash
+python scripts/compare_fedmixer.py \
+  --data-dir ./data/electricity_federated \
+  --clients 10 \
+  --rounds 4 \
+  --limit 0 \
+  --device cuda \
+  --mode both \
+  --output ./output/full_output.log
+```
+
+Use `--mode baseline` or `--mode continual` instead of `both` for one variant. Full mode
+uses every complete sliding window in each temporal task, batched in groups of 32.
+
 ### Standard single-client training
 
 The following `run.py` command trains one client with TimeMixer. It is not the multi-client

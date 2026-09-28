@@ -33,19 +33,9 @@ def build_rounds(data_dir, client_count, rounds, limit):
     for client_index in range(client_count):
         path = Path(data_dir) / 'clients' / 'client_{:03d}.csv'.format(client_index)
         values = load_csv_series(path, target='load', limit=limit)
-        client_batches.append(make_rounds(values, 1, rounds, 96, 96))
-    normalized_rounds = []
-    for round_index in range(rounds):
-        normalized_clients = []
-        for client_index in range(client_count):
-            batches = client_batches[client_index][round_index]
-            if len(batches) != 1:
-                raise ValueError(
-                    'client {} round {} must contain exactly one complete batch'.format(
-                        client_index, round_index + 1))
-            normalized_clients.append(batches[0])
-        normalized_rounds.append(normalized_clients)
-    return normalized_rounds
+        client_batches.append(make_rounds(values, 1, rounds, 96, 96, batch_size=32))
+    return [[client_batches[index][round_index]
+             for index in range(client_count)] for round_index in range(rounds)]
 
 
 def run_variant(round_batches, device, continual, seed):
@@ -61,9 +51,7 @@ def run_variant(round_batches, device, continual, seed):
     def forward(model, inputs):
         return model(inputs, None, None, None)
 
-    first_client_round = round_batches[0][0]
-    if isinstance(first_client_round, list):
-        first_client_round = first_client_round[0]
+    first_client_round = round_batches[0][0][0]
     public_inputs = first_client_round[0].to(device)
     trainer = ContinualFedMixer(clients, forward, public_inputs)
     history = trainer.fit(round_batches, continual=continual)
@@ -71,14 +59,12 @@ def run_variant(round_batches, device, continual, seed):
     mse_values = []
     mae_values = []
     with torch.no_grad():
-        for client, client_batch in zip(clients, round_batches[-1]):
-            if isinstance(client_batch, list):
-                client_batch = client_batch[0]
-            inputs, targets = client_batch
-            predictions = forward(client.model, inputs.to(device))
-            expected = targets.to(device)
-            mse_values.append(F.mse_loss(predictions, expected).item())
-            mae_values.append(F.l1_loss(predictions, expected).item())
+        for client, client_batches in zip(clients, round_batches[-1]):
+            for inputs, targets in client_batches:
+                predictions = forward(client.model, inputs.to(device))
+                expected = targets.to(device)
+                mse_values.append(F.mse_loss(predictions, expected).item())
+                mae_values.append(F.l1_loss(predictions, expected).item())
     return history, sum(mse_values) / len(mse_values), sum(mae_values) / len(mae_values)
 
 

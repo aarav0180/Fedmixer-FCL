@@ -19,14 +19,15 @@ def load_csv_series(path, target=None, limit=None):
                 values.append(float(row[target]))
             except (TypeError, ValueError):
                 continue
-            if limit is not None and len(values) >= limit:
+            if limit and len(values) >= limit:
                 break
     if len(values) < 2:
         raise ValueError('CSV must contain at least two numeric target values')
     return torch.tensor(values, dtype=torch.float32)
 
 
-def make_rounds(values, client_count=2, rounds=2, seq_len=4, pred_len=1):
+def make_rounds(values, client_count=2, rounds=2, seq_len=4, pred_len=1,
+                batch_size=32):
     if len(values) < client_count * (seq_len + pred_len):
         raise ValueError('dataset is too small for the requested clients and windows')
     streams = list(torch.tensor_split(values, client_count))
@@ -34,15 +35,17 @@ def make_rounds(values, client_count=2, rounds=2, seq_len=4, pred_len=1):
     for round_index in range(rounds):
         client_round = []
         for stream in streams:
-            start = round_index * (seq_len + pred_len)
-            chunk = stream[start:start + seq_len + pred_len]
+            start = 0 if round_index == 0 else round_index * len(stream) // rounds
+            end = len(stream) if round_index == rounds - 1 else (round_index + 1) * len(stream) // rounds
+            chunk = stream[start:end]
             batches = []
             window_count = len(chunk) - seq_len - pred_len + 1
-            if window_count > 0:
+            for batch_start in range(0, max(0, window_count), batch_size):
+                batch_indices = range(batch_start, min(batch_start + batch_size, window_count))
                 inputs = torch.stack([chunk[index:index + seq_len]
-                                      for index in range(window_count)]).unsqueeze(-1)
+                                      for index in batch_indices]).unsqueeze(-1)
                 targets = torch.stack([chunk[index + seq_len:index + seq_len + pred_len]
-                                       for index in range(window_count)]).unsqueeze(-1)
+                                       for index in batch_indices]).unsqueeze(-1)
                 batches.append((inputs, targets))
             client_round.append(batches)
         result.append(client_round)
