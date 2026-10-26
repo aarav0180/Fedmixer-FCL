@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from continual_federated import ContinualClient, ContinualFedMixer
 from continual_federated.csv_data import load_csv_series, make_rounds
 from models.TimeMixer import Model
+from utils.progress import ProgressReporter
 
 
 def make_model(device):
@@ -38,7 +39,7 @@ def build_rounds(data_dir, client_count, rounds, limit):
              for index in range(client_count)] for round_index in range(rounds)]
 
 
-def run_variant(round_batches, device, continual, seed):
+def run_variant(round_batches, device, continual, seed, name):
     torch.manual_seed(seed)
     clients = []
     for _ in round_batches[0]:
@@ -54,7 +55,36 @@ def run_variant(round_batches, device, continual, seed):
     first_client_round = round_batches[0][0][0]
     public_inputs = first_client_round[0].to(device)
     trainer = ContinualFedMixer(clients, forward, public_inputs)
-    history = trainer.fit(round_batches, continual=continual)
+    total_batches = sum(
+        len(client_batches)
+        for round_data in round_batches
+        for client_batches in round_data
+    )
+    progress = ProgressReporter('{} training'.format(name), total_batches)
+
+    def report_batch(completed, event):
+        detail = 'round {}/{}, client {}/{}, batch {}/{}, loss {:.5f}'.format(
+            event['round'], event['rounds'], event['client'], event['clients'],
+            event['batch'], event['batches'], event['loss'])
+        progress.update(completed, detail=detail)
+
+    def report_round(result):
+        progress.newline()
+        round_losses = ', '.join('{:.5f}'.format(loss) for loss in result['losses'])
+        print('{} | round {}/{} complete | client losses [{}] | clusters {} | '
+              'drift {} | replay memory {}'.format(
+                  name, result['round'], len(round_batches), round_losses,
+                  result['clusters'], result['drifted'], result['memory']))
+
+    print('{}: {} local batches across {} rounds'.format(
+        name, total_batches, len(round_batches)))
+    history = trainer.fit(
+        round_batches,
+        continual=continual,
+        on_batch_complete=report_batch,
+        on_round_complete=report_round,
+    )
+    progress.finish()
 
     mse_values = []
     mae_values = []
@@ -88,7 +118,8 @@ def main():
     }
     output_lines = []
     for name, continual in variants[args.mode]:
-        history, mse, mae = run_variant(round_batches, device, continual, seed=2021)
+        history, mse, mae = run_variant(
+            round_batches, device, continual, seed=2021, name=name)
         output_lines.append('{}: MSE={:.6f} MAE={:.6f} final_clusters={} memory={}'.format(
             name, mse, mae, history[-1]['clusters'], history[-1]['memory']))
 

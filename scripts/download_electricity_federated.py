@@ -8,9 +8,15 @@ import argparse
 import csv
 import json
 import os
+import sys
 import tempfile
-import urllib.request
+import time
+from urllib.request import urlopen
 import zipfile
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.progress import ProgressReporter
 
 
 URL = (
@@ -40,12 +46,38 @@ def read_source(path, max_rows=None):
     return client_ids, rows
 
 
+def download_archive(url, destination):
+    """Stream the archive to disk while reporting transfer progress and ETA."""
+    with urlopen(url, timeout=60) as response:
+        try:
+            total_bytes = int(response.headers.get('Content-Length', ''))
+        except (TypeError, ValueError):
+            total_bytes = None
+
+        progress = ProgressReporter('Downloading dataset', total_bytes, unit='bytes')
+        downloaded = 0
+        last_update = time.monotonic()
+        with open(destination, 'wb') as output:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                output.write(chunk)
+                downloaded += len(chunk)
+                now = time.monotonic()
+                if now - last_update >= 0.5:
+                    progress.update(downloaded)
+                    last_update = now
+        progress.update(downloaded, force=True)
+        progress.newline()
+
+
 def prepare(output, client_limit, max_rows, rounds, seq_len, pred_len):
     os.makedirs(output, exist_ok=True)
     with tempfile.TemporaryDirectory() as temp_dir:
         archive_path = os.path.join(temp_dir, 'electricity.zip')
-        print('downloading {}'.format(URL))
-        urllib.request.urlretrieve(URL, archive_path)
+        print('Downloading {}'.format(URL))
+        download_archive(URL, archive_path)
         client_ids, rows = read_source(archive_path, max_rows)
 
     complete = []

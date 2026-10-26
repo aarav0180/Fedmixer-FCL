@@ -12,6 +12,7 @@ import torch
 from continual_federated import ContinualClient, ContinualFedMixer
 from continual_federated.csv_data import load_csv_series, make_rounds
 from models.TimeMixer import Model
+from utils.progress import ProgressReporter
 
 
 def make_model():
@@ -50,11 +51,33 @@ def main():
 
     public_inputs = round_batches[0][0][0][0]
     trainer = ContinualFedMixer(clients, forward, public_inputs)
-    for result in trainer.fit(round_batches):
-        print('round={} clusters={} losses={} drifted={} memory={}'.format(
-            result['round'], result['clusters'],
+    total_batches = sum(
+        len(client_batches)
+        for round_data in round_batches
+        for client_batches in round_data
+    )
+    progress = ProgressReporter('Continual CSV training', total_batches)
+
+    def report_batch(completed, event):
+        detail = 'round {}/{}, client {}/{}, batch {}/{}, loss {:.5f}'.format(
+            event['round'], event['rounds'], event['client'], event['clients'],
+            event['batch'], event['batches'], event['loss'])
+        progress.update(completed, detail=detail)
+
+    def report_round(result):
+        progress.newline()
+        print('round {}/{} complete | clusters={} losses={} drifted={} memory={}'.format(
+            result['round'], len(round_batches), result['clusters'],
             [round(loss, 5) for loss in result['losses']],
             result['drifted'], result['memory']))
+
+    print('{} local batches across {} rounds'.format(total_batches, len(round_batches)))
+    trainer.fit(
+        round_batches,
+        on_batch_complete=report_batch,
+        on_round_complete=report_round,
+    )
+    progress.finish()
 
 
 if __name__ == '__main__':

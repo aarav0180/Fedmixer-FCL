@@ -21,8 +21,11 @@ class ContinualFedMixer:
         self.public_inputs = public_inputs
         self.server = server or FedMixerServer()
 
-    def fit(self, round_batches, continual=True):
+    def fit(self, round_batches, continual=True, on_batch_complete=None,
+            on_round_complete=None):
         history = []
+        completed_batches = 0
+        round_count = len(round_batches)
         for round_index, client_batches in enumerate(round_batches, start=1):
             if len(client_batches) != len(self.clients):
                 raise ValueError('each round must contain one entry per client')
@@ -39,14 +42,26 @@ class ContinualFedMixer:
                 client_loss = []
                 sample_count = 0
                 client_drift = False
-                for inputs, targets in batches:
+                for batch_index, (inputs, targets) in enumerate(batches, start=1):
                     if continual:
                         client_drift = client.observe(inputs) or client_drift
-                    client_loss.append(client.train_batch(
+                    batch_loss = client.train_batch(
                         inputs, targets, self.forward_fn,
                         self.public_inputs, public_targets[client_index],
-                        use_replay=continual))
+                        use_replay=continual)
+                    client_loss.append(batch_loss)
                     sample_count += len(inputs)
+                    completed_batches += 1
+                    if on_batch_complete is not None:
+                        on_batch_complete(completed_batches, {
+                            'round': round_index,
+                            'rounds': round_count,
+                            'client': client_index + 1,
+                            'clients': len(self.clients),
+                            'batch': batch_index,
+                            'batches': len(batches),
+                            'loss': batch_loss,
+                        })
                 losses.append(sum(client_loss) / max(1, len(client_loss)))
                 sample_counts.append(sample_count)
                 drifted.append(client_drift)
@@ -61,13 +76,16 @@ class ContinualFedMixer:
                 for client_index in indices:
                     self.clients[client_index].model.load_state_dict(cluster_states[cluster_index])
 
-            history.append({
+            round_result = {
                 'round': round_index,
                 'clusters': [list(indices) for indices in self.server.clusters],
                 'losses': losses,
                 'drifted': drifted,
                 'memory': [len(client.memory) for client in self.clients],
-            })
+            }
+            history.append(round_result)
+            if on_round_complete is not None:
+                on_round_complete(round_result)
         return history
 
     def _distillation_targets(self):
