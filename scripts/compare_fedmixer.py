@@ -34,7 +34,9 @@ def build_rounds(data_dir, client_count, rounds, limit):
     for client_index in range(client_count):
         path = Path(data_dir) / 'clients' / 'client_{:03d}.csv'.format(client_index)
         values = load_csv_series(path, target='load', limit=limit)
-        client_batches.append(make_rounds(values, 1, rounds, 96, 96, batch_size=32))
+        single_client_rounds = make_rounds(
+            values, 1, rounds, 96, 96, batch_size=32)
+        client_batches.append([round_data[0] for round_data in single_client_rounds])
     return [[client_batches[index][round_index]
              for index in range(client_count)] for round_index in range(rounds)]
 
